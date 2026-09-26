@@ -47,8 +47,7 @@ if uploaded_file is not None:
     if not out_of_range_df.empty:
       has_errors = True
       st.error(
-          f"[ALERT] Found {len(out_of_range_df)} out-of-range marks (must be"
-          " between 0 and 100)."
+          f"[ALERT] Found {len(out_of_range_df)} out-of-range marks (must be between 0 and 100)."
       )
       with st.expander("View Out-of-Range Grade Exceptions"):
         st.dataframe(out_of_range_df)
@@ -59,8 +58,7 @@ if uploaded_file is not None:
       )
     else:
       st.success(
-          f"✅ Audit Complete! {len(clean_df)} valid records processed"
-          " successfully."
+          f"✅ Audit Complete! {len(clean_df)} valid records processed successfully."
       )
 
     st.markdown("---")
@@ -82,9 +80,7 @@ if uploaded_file is not None:
           label="Download Clean Marks (.xlsx)",
           data=clean_excel,
           file_name="clean_marks_output.xlsx",
-          mime=(
-              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-          ),
+          mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       )
 
     with col2:
@@ -97,10 +93,13 @@ if uploaded_file is not None:
             label="Download Exception Report (.xlsx)",
             data=exceptions_excel,
             file_name="exception_report.xlsx",
-            mime=(
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            ),
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
+
+  except Exception as e:
+    st.error(
+        f"An error occurred while processing your file: {e}. Please ensure your columns match: Student_ID, Student_Name, Final_Mark."
+    )
 
   except Exception as e:
     st.error(
