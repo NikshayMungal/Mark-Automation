@@ -1,48 +1,109 @@
-import streamlit as st
+import io
 import pandas as pd
+import streamlit as st
+from mark_automation import audit_marks
 
-st.set_page_config(page_title="Mark Automation Portal", page_icon="🎓")
+# Page Configuration
+st.set_page_config(
+    page_title="Academic Mark Automation & Audit Portal", page_icon="🎓", layout="centered"
+)
 
+# App Header
 st.title("🎓 Academic Mark Automation & Audit Portal")
-st.write("Upload your class mark sheet below to automatically verify student IDs, check for out-of-range grades, and generate clean reports.")
+st.write(
+    "Upload your class mark sheet below to automatically verify student IDs, check for out-of-range grades, and generate clean reports."
+)
 
-# File uploader widget for teachers
-uploaded_file = st.file_uploader("Upload Mark Sheet (Excel or CSV)", type=["xlsx", "csv"])
+# File Uploader
+uploaded_file = st.file_uploader(
+    "Upload Mark Sheet (Excel or CSV)", type=["xlsx", "csv"]
+)
 
 if uploaded_file is not None:
-    # Load the file based on its type
-    if uploaded_file.name.endswith('.csv'):
-        df = pd.read_csv(uploaded_file)
+  try:
+    # Read the file based on extension
+    if uploaded_file.name.endswith(".csv"):
+      input_df = pd.read_csv(uploaded_file)
     else:
-        df = pd.read_excel(uploaded_file)
-        
+      input_df = pd.read_excel(uploaded_file)
+
     st.subheader("📋 Uploaded Data Preview")
-    st.dataframe(df.head())
+    st.dataframe(input_df.head())
 
-    # Audit checks
-    missing_ids = df[df['Student_ID'].isnull()]
-    invalid_marks = df[(df['Final_Mark'] < 0) | (df['Final_Mark'] > 100)]
+    # Run the audit automation logic
+    clean_df, missing_ids_df, out_of_range_df = audit_marks(input_df)
 
-    if not missing_ids.empty:
-        st.error(f"[ALERT] Found {len(missing_ids)} rows with missing Student IDs.")
-    if not invalid_marks.empty:
-        st.error(f"[ALERT] Found {len(invalid_marks)} out-of-range marks (must be between 0 and 100).")
+    # Display Alerts and Summaries
+    has_errors = False
 
-    # Clean the data
-    clean_df = df.dropna(subset=['Student_ID']).copy()
-    clean_df = clean_df[(clean_df['Final_Mark'] >= 0) & (clean_df['Final_Mark'] <= 100)]
+    if not missing_ids_df.empty:
+      has_errors = True
+      st.error(
+          f"[ALERT] Found {len(missing_ids_df)} rows with missing Student IDs."
+      )
+      with st.expander("View Missing ID Exceptions"):
+        st.dataframe(missing_ids_df)
 
-    if 'Student_Name' in clean_df.columns:
-        clean_df['Student_Name'] = clean_df['Student_Name'].str.strip()
+    if not out_of_range_df.empty:
+      has_errors = True
+      st.error(
+          f"[ALERT] Found {len(out_of_range_df)} out-of-range marks (must be"
+          " between 0 and 100)."
+      )
+      with st.expander("View Out-of-Range Grade Exceptions"):
+        st.dataframe(out_of_range_df)
 
-    st.success(f"✅ Audit Complete! {len(clean_df)} valid records processed successfully.")
+    if not has_errors:
+      st.success(
+          "🎉 Audit Complete! All records are valid and fully compliant."
+      )
+    else:
+      st.success(
+          f"✅ Audit Complete! {len(clean_df)} valid records processed"
+          " successfully."
+      )
 
-    # Convert clean dataframe to CSV for easy downloading
-    csv_data = clean_df.to_csv(index=False).encode('utf-8')
-    
-    st.download_button(
-        label="📥 Download Cleaned Mark Sheet",
-        data=csv_data,
-        file_name="clean_marks_output.csv",
-        mime="text/csv"
+    st.markdown("---")
+    st.subheader("📥 Download Audit Results")
+
+    # Helper function to convert dataframe to Excel bytes for proper formatting
+    def convert_df_to_excel(df):
+      output = io.BytesIO()
+      with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Report")
+      return output.getvalue()
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+      # Clean Marks Download Button (Excel)
+      clean_excel = convert_df_to_excel(clean_df)
+      st.download_button(
+          label="Download Clean Marks (.xlsx)",
+          data=clean_excel,
+          file_name="clean_marks_output.xlsx",
+          mime=(
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          ),
+      )
+
+    with col2:
+      if has_errors:
+        # Combine exceptions into a single report dataframe
+        exceptions_df = pd.concat([missing_ids_df, out_of_range_df]).drop_duplicates()
+        exceptions_excel = convert_df_to_excel(exceptions_df)
+
+        st.download_button(
+            label="Download Exception Report (.xlsx)",
+            data=exceptions_excel,
+            file_name="exception_report.xlsx",
+            mime=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+        )
+
+  except Exception as e:
+    st.error(
+        f"An error occurred while processing your file: {e}. Please ensure your"
+        " columns match: Student_ID, Student_Name, Final_Mark."
     )
